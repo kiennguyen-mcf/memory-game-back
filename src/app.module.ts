@@ -7,6 +7,7 @@ import { AppController } from './controllers/app.controller';
 import { AdminController } from './controllers/admin.controller';
 import { GameSessionController } from './controllers/game-session.controller';
 import { PlayerController } from './controllers/player.controller';
+import { RewardController } from './controllers/reward.controller';
 import { StatsController } from './controllers/stats.controller';
 import { AppClassSerializerInterceptor } from './interceptors/mongo-class-serializer.interceptor';
 import {
@@ -14,6 +15,14 @@ import {
   GameSessionSchema,
 } from './models/entities/game-session.entity';
 import { Player, PlayerSchema } from './models/entities/player.entity';
+import {
+  GiftInventory,
+  GiftInventorySchema,
+} from './models/entities/gift-inventory.entity';
+import {
+  RewardClaim,
+  RewardClaimSchema,
+} from './models/entities/reward-claim.entity';
 import { GameSessionsRepository } from './models/repos/game-session.repo';
 import { PlayersRepository } from './models/repos/player.repo';
 import { AdminResetService } from './services/admin-reset.service';
@@ -22,6 +31,7 @@ import { CacheDomain } from './services/cache.service';
 import { GameSessionQueueService } from './services/game-session-queue.service';
 import { GameSessionService } from './services/game-session.service';
 import { PlayerService } from './services/player.service';
+import { RewardService } from './services/reward.service';
 import { StatsService } from './services/stats.service';
 
 @Module({
@@ -50,6 +60,14 @@ import { StatsService } from './services/stats.service';
         name: GameSession.name,
         schema: GameSessionSchema,
       },
+      {
+        name: GiftInventory.name,
+        schema: GiftInventorySchema,
+      },
+      {
+        name: RewardClaim.name,
+        schema: RewardClaimSchema,
+      },
     ]),
   ],
   controllers: [
@@ -57,6 +75,7 @@ import { StatsService } from './services/stats.service';
     AdminController,
     PlayerController,
     GameSessionController,
+    RewardController,
     StatsController,
   ],
   providers: [
@@ -69,6 +88,7 @@ import { StatsService } from './services/stats.service';
     PlayerService,
     GameSessionService,
     GameSessionQueueService,
+    RewardService,
     StatsService,
 
     // * repos
