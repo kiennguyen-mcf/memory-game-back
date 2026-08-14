@@ -19,12 +19,32 @@ export class InventoryResponse {
   v20: number;
 }
 
+export class WheelConfigResponse {
+  @ApiProperty({ example: 3 })
+  odu: number;
+
+  @ApiProperty({ example: 2 })
+  gau: number;
+
+  @ApiProperty({ example: 1 })
+  v10: number;
+
+  @ApiProperty({ example: 1 })
+  v15: number;
+
+  @ApiProperty({ example: 1 })
+  v20: number;
+}
+
 export class RewardStateResponse {
   @ApiProperty({ type: RewardClaimResponse, nullable: true })
   claim: RewardClaimResponse | null;
 
   @ApiProperty({ type: InventoryResponse })
   inventory: GiftInventory;
+
+  @ApiProperty({ type: WheelConfigResponse })
+  wheelConfig: WheelConfigResponse;
 }
 
 export class SpinResponse {
@@ -36,6 +56,9 @@ export class SpinResponse {
 
   @ApiProperty({ type: InventoryResponse })
   inventory: GiftInventory;
+
+  @ApiProperty({ type: WheelConfigResponse })
+  wheelConfig: WheelConfigResponse;
 }
 
 export class GauResponse {
@@ -44,6 +67,9 @@ export class GauResponse {
 
   @ApiProperty({ type: InventoryResponse })
   inventory: GiftInventory;
+
+  @ApiProperty({ type: WheelConfigResponse })
+  wheelConfig: WheelConfigResponse;
 }
 
 export class FoodResponse {
@@ -75,7 +101,7 @@ export class AdminInventoryResponse {
   @ApiProperty({
     example: {
       luck: 0,
-      gifts: { odu: 0.13, gau: 0.23, v10: 0.21, v15: 0.21, v20: 0.21 },
+      gifts: { odu: 0.375, gau: 0.25, v10: 0.125, v15: 0.125, v20: 0.125 },
     },
   })
   odds: {
@@ -85,4 +111,7 @@ export class AdminInventoryResponse {
 
   @ApiProperty({ type: AdminGiftStatResponse, isArray: true })
   gifts: AdminGiftStatResponse[];
+
+  @ApiProperty({ type: WheelConfigResponse })
+  wheelConfig: WheelConfigResponse;
 }

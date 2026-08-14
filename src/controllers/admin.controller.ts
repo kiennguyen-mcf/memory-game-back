@@ -3,6 +3,7 @@ import { AdminLoginRequest } from '@/models/requests/admin-login.request';
 import { AdminLoginResponse } from '@/models/responses/admin-login.response';
 import { AdminResetResponse } from '@/models/responses/admin-reset.response';
 import { UpdateInventoryRequest } from '@/models/requests/update-inventory.request';
+import { UpdateWheelConfigRequest } from '@/models/requests/update-wheel-config.request';
 import { AdminInventoryResponse } from '@/models/responses/reward-state.response';
 import { StatsOverviewResponse } from '@/models/responses/stats-overview.response';
 import { AdminAuthService } from '@/services/admin-auth.service';
@@ -83,6 +84,31 @@ export class AdminController {
     @Body() dto: UpdateInventoryRequest,
   ): Promise<AdminInventoryResponse> {
     return this.rewardService.updateInventory(dto.inventory);
+  }
+
+  @Get('rewards/wheel-config')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Lấy cấu hình vòng quay (số ô mỗi quà) + tỷ lệ trúng' })
+  @ApiOkResponse({ type: () => AdminInventoryResponse })
+  @ApiUnauthorizedResponse({ description: 'Thiếu hoặc sai Bearer token' })
+  getWheelConfig(): Promise<AdminInventoryResponse> {
+    return this.rewardService.getAdminInventory();
+  }
+
+  @Post('rewards/wheel-config')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminGuard)
+  @ApiBearerAuth('admin-jwt')
+  @ApiOperation({ summary: 'Cập nhật cấu hình vòng quay (số ô mỗi quà). Tỷ lệ trúng = số ô quà đó / tổng số ô còn hàng' })
+  @ApiOkResponse({ type: () => AdminInventoryResponse })
+  @ApiBadRequestResponse({ description: 'Dữ liệu wheel config không hợp lệ' })
+  @ApiUnauthorizedResponse({ description: 'Thiếu hoặc sai Bearer token' })
+  updateWheelConfig(
+    @Body() dto: UpdateWheelConfigRequest,
+  ): Promise<AdminInventoryResponse> {
+    return this.rewardService.updateWheelConfig(dto);
   }
 
   @Post('reset')

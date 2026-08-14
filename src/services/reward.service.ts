@@ -8,17 +8,21 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { GiftInventory } from '@/models/entities/gift-inventory.entity';
 import { RewardClaim } from '@/models/entities/reward-claim.entity';
+import { WheelConfig } from '@/models/entities/wheel-config.entity';
 import { InventoryUpdate } from '@/models/requests/update-inventory.request';
+import { UpdateWheelConfigRequest } from '@/models/requests/update-wheel-config.request';
 import {
   GIFTS,
   GIFT_KEYS,
   INVENTORY_DEFAULT,
   LUCK_LABEL,
+  WHEEL_CONFIG_DEFAULT,
   computeWheelOdds,
   pickWheelResult,
   totalStock,
   type GiftInventory as GiftInventoryRecord,
   type GiftKey,
+  type WheelConfig as WheelConfigRecord,
   type WheelGift,
 } from '@/utils/rewards';
 import {
@@ -36,6 +40,8 @@ export class RewardService implements OnModuleInit {
     private readonly giftInventoryModel: Model<GiftInventory>,
     @InjectModel(RewardClaim.name)
     private readonly rewardClaimModel: Model<RewardClaim>,
+    @InjectModel(WheelConfig.name)
+    private readonly wheelConfigModel: Model<WheelConfig>,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -45,6 +51,18 @@ export class RewardService implements OnModuleInit {
     await this.giftInventoryModel.insertMany(
       GIFT_KEYS.map((key) => ({ key, count: INVENTORY_DEFAULT[key] })),
     );
+  }
+
+  private async loadWheelConfig(): Promise<WheelConfigRecord> {
+    const row = await this.wheelConfigModel.findOne({ key: 'default' }).lean().exec();
+    if (!row) return { ...WHEEL_CONFIG_DEFAULT };
+    return {
+      odu: row.odu,
+      gau: row.gau,
+      v10: row.v10,
+      v15: row.v15,
+      v20: row.v20,
+    };
   }
 
   private toClaimView(row: RewardClaim | null): RewardClaimResponse | null {
@@ -72,19 +90,24 @@ export class RewardService implements OnModuleInit {
     if (!playerId) {
       throw new BadRequestException({ error: 'Missing userId' });
     }
-    const [claim, inventory] = await Promise.all([
+    const [claim, inventory, wheelConfig] = await Promise.all([
       this.rewardClaimModel.findOne({ playerId }).lean().exec(),
       this.loadInventory(),
+      this.loadWheelConfig(),
     ]);
-    return { claim: this.toClaimView(claim), inventory };
+    return { claim: this.toClaimView(claim), inventory, wheelConfig };
   }
 
   async getAdminInventory(): Promise<AdminInventoryResponse> {
-    const inventory = await this.loadInventory();
-    const odds = computeWheelOdds(inventory);
+    const [inventory, wheelConfig] = await Promise.all([
+      this.loadInventory(),
+      this.loadWheelConfig(),
+    ]);
+    const odds = computeWheelOdds(inventory, wheelConfig);
     return {
       inventory,
       odds,
+      wheelConfig,
       gifts: GIFT_KEYS.map((key) => ({
         key,
         name: GIFTS[key].name,
@@ -103,6 +126,26 @@ export class RewardService implements OnModuleInit {
         .findOneAndUpdate(
           { key },
           { $set: { count: update[key] } },
+          { upsert: true, new: true },
+        )
+        .lean()
+        .exec();
+    }
+    return this.getAdminInventory();
+  }
+
+  async updateWheelConfig(
+    dto: UpdateWheelConfigRequest,
+  ): Promise<AdminInventoryResponse> {
+    const patch: Partial<Record<GiftKey, number>> = {};
+    for (const key of GIFT_KEYS) {
+      if (dto[key] !== undefined) patch[key] = dto[key];
+    }
+    if (Object.keys(patch).length > 0) {
+      await this.wheelConfigModel
+        .findOneAndUpdate(
+          { key: 'default' },
+          { $set: { ...patch } },
           { upsert: true, new: true },
         )
         .lean()
@@ -133,13 +176,14 @@ export class RewardService implements OnModuleInit {
     if (totalStock(stock) <= 0) {
       throw new ConflictException({ error: 'all-out-of-stock' });
     }
+    const wheelConfig = await this.loadWheelConfig();
 
     let index: number | null = null;
     let gift: GiftKey | null = null;
     let luck = false;
 
     for (let attempt = 0; attempt < 5 && index === null; attempt++) {
-      const pick = pickWheelResult(stock);
+      const pick = pickWheelResult(stock, wheelConfig);
 
       if (pick.gift === null) {
         index = pick.index;
@@ -193,6 +237,7 @@ export class RewardService implements OnModuleInit {
       claim: this.toClaimView(claim),
       index,
       inventory,
+      wheelConfig,
     };
   }
 
@@ -244,14 +289,16 @@ export class RewardService implements OnModuleInit {
       .lean()
       .exec();
 
-    const [claim, inventory] = await Promise.all([
+    const [claim, inventory, wheelConfig] = await Promise.all([
       this.rewardClaimModel.findOne({ playerId }).lean().exec(),
       this.loadInventory(),
+      this.loadWheelConfig(),
     ]);
 
     return {
       claim: this.toClaimView(claim),
       inventory,
+      wheelConfig,
     };
   }
 

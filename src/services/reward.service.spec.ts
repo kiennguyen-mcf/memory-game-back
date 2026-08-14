@@ -4,7 +4,8 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { RewardService } from '@/services/reward.service';
 import { GiftInventory } from '@/models/entities/gift-inventory.entity';
 import { RewardClaim } from '@/models/entities/reward-claim.entity';
-import { INVENTORY_DEFAULT } from '@/utils/rewards';
+import { WheelConfig } from '@/models/entities/wheel-config.entity';
+import { INVENTORY_DEFAULT, WHEEL_CONFIG_DEFAULT } from '@/utils/rewards';
 
 const giftInventoryModel = () => ({
   countDocuments: jest.fn(),
@@ -14,6 +15,11 @@ const giftInventoryModel = () => ({
 });
 
 const rewardClaimModel = () => ({
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+});
+
+const wheelConfigModel = () => ({
   findOne: jest.fn(),
   findOneAndUpdate: jest.fn(),
 });
@@ -43,10 +49,12 @@ describe('RewardService', () => {
   let service: RewardService;
   let giftModel: ReturnType<typeof giftInventoryModel>;
   let claimModel: ReturnType<typeof rewardClaimModel>;
+  let wheelModel: ReturnType<typeof wheelConfigModel>;
 
   beforeEach(async () => {
     giftModel = giftInventoryModel();
     claimModel = rewardClaimModel();
+    wheelModel = wheelConfigModel();
 
     // Default chainable resolves so un-mocked calls never break.
     giftModel.countDocuments.mockReturnValue(chainableResolve(0));
@@ -55,12 +63,20 @@ describe('RewardService', () => {
     giftModel.findOneAndUpdate.mockReturnValue(chainableResolve(null));
     claimModel.findOne.mockReturnValue(chainableResolve(null));
     claimModel.findOneAndUpdate.mockReturnValue(chainableResolve(null));
+    wheelModel.findOne.mockReturnValue(
+      chainableResolve({
+        key: 'default',
+        ...WHEEL_CONFIG_DEFAULT,
+      }),
+    );
+    wheelModel.findOneAndUpdate.mockReturnValue(chainableResolve(null));
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         RewardService,
         { provide: getModelToken(GiftInventory.name), useValue: giftModel },
         { provide: getModelToken(RewardClaim.name), useValue: claimModel },
+        { provide: getModelToken(WheelConfig.name), useValue: wheelModel },
       ],
     }).compile();
 
@@ -120,6 +136,7 @@ describe('RewardService', () => {
         v15: 0,
         v20: 0,
       });
+      expect(result.wheelConfig).toEqual(WHEEL_CONFIG_DEFAULT);
     });
 
     it('throws BadRequestException for missing userId', async () => {
@@ -149,13 +166,78 @@ describe('RewardService', () => {
       expect(result.gifts).toHaveLength(5);
       expect(result.gifts[0]).toMatchObject({ key: 'odu', stock: 60 });
       expect(result.gifts[4]).toMatchObject({ key: 'v20', stock: 100 });
-      // Odds are weighted by remaining stock: stock[key] / totalStock.
-      expect(result.odds.gifts.odu).toBeCloseTo(60 / 468, 5);
-      expect(result.odds.gifts.gau).toBeCloseTo(108 / 468, 5);
-      expect(result.odds.gifts.v10).toBeCloseTo(100 / 468, 5);
-      expect(result.odds.gifts.v15).toBeCloseTo(100 / 468, 5);
-      expect(result.odds.gifts.v20).toBeCloseTo(100 / 468, 5);
+      // Odds follow the wheel config: config[key] / sum(config) for in-stock gifts.
+      // Default 8-segment config: odu 3, gau 2, v10 1, v15 1, v20 1.
+      expect(result.odds.gifts.odu).toBeCloseTo(3 / 8, 5);
+      expect(result.odds.gifts.gau).toBeCloseTo(2 / 8, 5);
+      expect(result.odds.gifts.v10).toBeCloseTo(1 / 8, 5);
+      expect(result.odds.gifts.v15).toBeCloseTo(1 / 8, 5);
+      expect(result.odds.gifts.v20).toBeCloseTo(1 / 8, 5);
       expect(result.odds.luck).toBe(0);
+      expect(result.wheelConfig).toEqual(WHEEL_CONFIG_DEFAULT);
+    });
+
+    it('excludes out-of-stock gifts from the odds and rescales the rest', async () => {
+      giftModel.find.mockReturnValue(
+        chainableResolve(
+          inventoryRows({ odu: 60, gau: 0, v10: 0, v15: 100, v20: 100 }),
+        ),
+      );
+
+      const result = await service.getAdminInventory();
+
+      expect(result.odds.gifts.odu).toBeCloseTo(3 / 5, 5);
+      expect(result.odds.gifts.gau).toBe(0);
+      expect(result.odds.gifts.v10).toBe(0);
+      expect(result.odds.gifts.v15).toBeCloseTo(1 / 5, 5);
+      expect(result.odds.gifts.v20).toBeCloseTo(1 / 5, 5);
+    });
+  });
+
+  describe('updateWheelConfig', () => {
+    it('persists only provided fields and returns the admin view', async () => {
+      giftModel.find.mockReturnValue(
+        chainableResolve(
+          inventoryRows({ odu: 60, gau: 108, v10: 100, v15: 100, v20: 100 }),
+        ),
+      );
+      wheelModel.findOneAndUpdate.mockReturnValue(
+        chainableResolve({ key: 'default', ...WHEEL_CONFIG_DEFAULT }),
+      );
+      // After update, loadWheelConfig returns the new config: v15 + v20 harder.
+      wheelModel.findOne.mockReturnValue(
+        chainableResolve({
+          key: 'default',
+          odu: 4,
+          gau: 2,
+          v10: 1,
+          v15: 1,
+          v20: 0,
+        }),
+      );
+
+      const result = await service.updateWheelConfig({
+        odu: 4,
+        v20: 0,
+      });
+
+      expect(wheelModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { key: 'default' },
+        { $set: { odu: 4, v20: 0 } },
+        { upsert: true, new: true },
+      );
+      expect(result.wheelConfig).toEqual({ odu: 4, gau: 2, v10: 1, v15: 1, v20: 0 });
+      expect(result.odds.gifts.odu).toBeCloseTo(4 / 8, 5);
+      expect(result.odds.gifts.v20).toBe(0);
+    });
+
+    it('skips the write when the payload is empty', async () => {
+      giftModel.find.mockReturnValue(chainableResolve(inventoryRows({})));
+
+      const result = await service.updateWheelConfig({});
+
+      expect(wheelModel.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(result.wheelConfig).toEqual(WHEEL_CONFIG_DEFAULT);
     });
   });
 

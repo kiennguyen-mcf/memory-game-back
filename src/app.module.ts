@@ -23,6 +23,10 @@ import {
   RewardClaim,
   RewardClaimSchema,
 } from './models/entities/reward-claim.entity';
+import {
+  WheelConfig,
+  WheelConfigSchema,
+} from './models/entities/wheel-config.entity';
 import { GameSessionsRepository } from './models/repos/game-session.repo';
 import { PlayersRepository } from './models/repos/player.repo';
 import { AdminResetService } from './services/admin-reset.service';
@@ -67,6 +71,10 @@ import { StatsService } from './services/stats.service';
       {
         name: RewardClaim.name,
         schema: RewardClaimSchema,
+      },
+      {
+        name: WheelConfig.name,
+        schema: WheelConfigSchema,
       },
     ]),
   ],
