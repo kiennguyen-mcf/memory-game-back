@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-game-api
+  namespace: memory-game
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: memory-game-api
+  template:
+    metadata:
+      labels:
+        app: memory-game-api
+    spec:
+      containers:
+        - name: api
+          image: localhost:32000/memory-game-api:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 3000
+
+          envFrom:
+            - secretRef:
+                name: memory-game-env
+
+          env:
+            - name: PORT
+              value: "3000"
+
+            - name: NODE_ENV
+              value: "production"
+
+            - name: MONGODB_URI
+              value: "mongodb://mongo:27017/microfin-memory-game"
+
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-game-api
+  namespace: memory-game
+spec:
+  selector:
+    app: memory-game-api
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP

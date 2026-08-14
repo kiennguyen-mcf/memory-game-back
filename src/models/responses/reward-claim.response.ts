@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { GiftKey, WheelGift } from '@/utils/rewards';
+import type { WheelGift } from '@/utils/rewards';
 
 export class RewardClaimResponse {
   @ApiProperty({ example: false })
@@ -8,9 +8,9 @@ export class RewardClaimResponse {
   @ApiProperty({ example: '👕 Áo', nullable: true })
   wheelPrizeLabel: string | null;
 
-  @ApiProperty({ example: 'ao', nullable: true })
+  @ApiProperty({ example: 'v10', nullable: true })
   wheelGift: WheelGift | null;
 
-  @ApiProperty({ example: 'ao', nullable: true })
-  chosenGift: GiftKey | null;
+  @ApiProperty({ example: false })
+  gauGranted: boolean;
 }

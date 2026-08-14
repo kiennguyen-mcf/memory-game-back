@@ -1,5 +1,6 @@
-export type GiftKey = 'ao' | 'tui' | 'odu' | 'gau';
+export type GiftKey = 'odu' | 'gau' | 'v10' | 'v15' | 'v20';
 
+// Kept for backward compatibility with claims stored before the wheel redesign.
 export type WheelGift = GiftKey | 'unlucky';
 
 export type GiftInventory = Record<GiftKey, number>;
@@ -11,51 +12,74 @@ export interface Gift {
 }
 
 export const GIFTS: Record<WheelGift, Gift> = {
-  ao: { key: 'ao', name: 'Áo', icon: '👕' },
-  tui: { key: 'tui', name: 'Túi', icon: '🎒' },
   odu: { key: 'odu', name: 'Ô dù', icon: '☂️' },
   gau: { key: 'gau', name: 'Gấu bông', icon: '🧸' },
+  v10: { key: 'v10', name: 'Voucher giảm 10%', icon: '🎫' },
+  v15: { key: 'v15', name: 'Voucher giảm 15%', icon: '🎫' },
+  v20: { key: 'v20', name: 'Voucher giảm 20%', icon: '🎫' },
   unlucky: { key: 'unlucky', name: 'Chúc bạn may mắn lần sau', icon: '🍀' },
 };
 
-export const GIFT_KEYS: GiftKey[] = ['ao', 'tui', 'odu', 'gau'];
-
-// Gifts the player can pick directly (600+ tier). Gấu bông is NOT pickable —
-// it is won by landing on a "may mắn lần sau" (luck) segment of the wheel.
-export const WHEEL_GIFT_KEYS: GiftKey[] = ['ao', 'tui', 'odu'];
+export const GIFT_KEYS: GiftKey[] = ['odu', 'gau', 'v10', 'v15', 'v20'];
 
 export interface WheelSegment {
   label: string;
+  icon: string;
   gift: GiftKey | null;
 }
 
 export const LUCK_LABEL = '🍀 Chúc bạn may mắn lần sau!';
 
-// The wheel mixes prize segments with "may mắn lần sau" (luck) segments. A luck
-// segment awards a Gấu bông (gau) while gau is in stock — so every outcome is a
-// prize and the luck label is simply the visual for the Gấu bông.
-export const WHEEL_SEGMENTS: WheelSegment[] = [
-  { label: '👕 Áo', gift: 'ao' },
-  { label: '🍀 Chúc bạn may mắn lần sau', gift: null },
-  { label: '🎒 Túi', gift: 'tui' },
-  { label: '☂️ Ô dù', gift: 'odu' },
-  { label: '🍀 Chúc bạn may mắn lần sau', gift: null },
-  { label: '👕 Áo', gift: 'ao' },
-  { label: '☂️ Ô dù', gift: 'odu' },
-  { label: '🍀 Chúc bạn may mắn lần sau', gift: null },
-  { label: '🎒 Túi', gift: 'tui' },
-  { label: '🍀 Chúc bạn may mắn lần sau', gift: null },
+// 12 segments. A luck segment ("may mắn lần sau") awards a Gấu bông (gau) while
+// gau is in stock. Segment counts are proportional to the default stock, so the
+// wheel looks consistent with the weighted-by-stock draw.
+const SEGMENT_COUNTS: { label: string; icon: string; gift: GiftKey | null; count: number }[] = [
+  { label: 'Ô dù', icon: '☂️', gift: 'odu', count: 2 },
+  { label: 'May mắn', icon: '🍀', gift: null, count: 3 },
+  { label: 'Giảm 10%', icon: '🎫', gift: 'v10', count: 3 },
+  { label: 'Giảm 15%', icon: '🎫', gift: 'v15', count: 2 },
+  { label: 'Giảm 20%', icon: '🎫', gift: 'v20', count: 2 },
 ];
 
+function buildWheelSegments(): WheelSegment[] {
+  const segments: WheelSegment[] = [];
+  const remaining = SEGMENT_COUNTS.map((s) => s.count);
+  const total = SEGMENT_COUNTS.reduce((sum, s) => sum + s.count, 0);
+
+  for (let placed = 0; placed < total; placed++) {
+    let best = -1;
+    let bestRatio = -1;
+    for (let i = 0; i < SEGMENT_COUNTS.length; i++) {
+      if (remaining[i] <= 0) continue;
+      const ratio = remaining[i] / SEGMENT_COUNTS[i].count;
+      if (ratio > bestRatio) {
+        bestRatio = ratio;
+        best = i;
+      }
+    }
+    segments.push({
+      label: SEGMENT_COUNTS[best].label,
+      icon: SEGMENT_COUNTS[best].icon,
+      gift: SEGMENT_COUNTS[best].gift,
+    });
+    remaining[best] -= 1;
+  }
+
+  return segments;
+}
+
+export const WHEEL_SEGMENTS: WheelSegment[] = buildWheelSegments();
+
 export const INVENTORY_DEFAULT: Record<GiftKey, number> = {
-  ao: 100,
-  tui: 100,
-  odu: 100,
-  gau: 100,
+  odu: 60,
+  gau: 108,
+  v10: 100,
+  v15: 100,
+  v20: 100,
 };
 
 export function totalStock(stock: GiftInventory): number {
-  return stock.ao + stock.tui + stock.odu + stock.gau;
+  return GIFT_KEYS.reduce((sum, key) => sum + stock[key], 0);
 }
 
 // Draw a gift weighted by remaining stock: the chance of each gift equals

@@ -9,7 +9,7 @@ import { ApiProperty } from '@nestjs/swagger';
   },
 })
 export class GiftInventory extends BaseEntity {
-  @ApiProperty({ example: 'ao', enum: ['ao', 'tui', 'odu', 'gau'] })
+  @ApiProperty({ example: 'odu', enum: ['odu', 'gau', 'v10', 'v15', 'v20'] })
   @Prop({ required: true, unique: true })
   key: string;
 

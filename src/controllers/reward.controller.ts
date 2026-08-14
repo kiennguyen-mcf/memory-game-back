@@ -16,11 +16,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { FoodRequest } from '@/models/requests/food.request';
-import { PickRequest } from '@/models/requests/pick.request';
 import { SpinRequest } from '@/models/requests/spin.request';
 import {
   FoodResponse,
-  PickResponse,
+  GauResponse,
   RewardStateResponse,
   SpinResponse,
 } from '@/models/responses/reward-state.response';
@@ -62,19 +61,18 @@ export class RewardController {
     return this.rewardService.spin(dto.playerId);
   }
 
-  @Post('pick')
+  @Post('gau')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Chọn quà (tier ≥ 600 điểm)' })
-  @ApiOkResponse({ type: () => PickResponse })
-  @ApiBadRequestResponse({
-    description:
-      'Thiếu dữ liệu, gift không hợp lệ, hoặc chưa quay (spin-first)',
+  @ApiOperation({
+    summary: 'Nhận gấu bông chắc chắn (tier 600 điểm) trước khi quay',
   })
+  @ApiOkResponse({ type: () => GauResponse })
+  @ApiBadRequestResponse({ description: 'Thiếu playerId' })
   @ApiConflictResponse({
-    description: 'Đã chọn rồi (already-picked) hoặc hết hàng (out-of-stock)',
+    description: 'Đã nhận rồi (already-granted) hoặc hết hàng (out-of-stock)',
   })
-  pick(@Body() dto: PickRequest): Promise<PickResponse> {
-    return this.rewardService.pick(dto.playerId, dto.gift);
+  grantGau(@Body() dto: SpinRequest): Promise<GauResponse> {
+    return this.rewardService.grantGau(dto.playerId);
   }
 
   @Post('food')

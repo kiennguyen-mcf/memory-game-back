@@ -21,13 +21,13 @@ export class RewardClaim extends BaseEntity {
   @Prop({ default: null })
   wheelPrizeLabel: string | null;
 
-  @ApiProperty({ example: 'ao', nullable: true })
+  @ApiProperty({ example: 'v10', nullable: true })
   @Prop({ default: null })
   wheelGift: string | null;
 
-  @ApiProperty({ example: 'ao', nullable: true })
-  @Prop({ default: null })
-  chosenGift: string | null;
+  @ApiProperty({ example: false })
+  @Prop({ type: Boolean, default: false })
+  gauGranted: boolean;
 }
 
 export const RewardClaimSchema = SchemaFactory.createForClass(RewardClaim);

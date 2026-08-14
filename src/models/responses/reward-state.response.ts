@@ -3,17 +3,20 @@ import type { GiftInventory, GiftKey } from '@/utils/rewards';
 import { RewardClaimResponse } from './reward-claim.response';
 
 export class InventoryResponse {
-  @ApiProperty({ example: 100 })
-  ao: number;
-
-  @ApiProperty({ example: 100 })
-  tui: number;
-
-  @ApiProperty({ example: 100 })
+  @ApiProperty({ example: 60 })
   odu: number;
 
-  @ApiProperty({ example: 100 })
+  @ApiProperty({ example: 108 })
   gau: number;
+
+  @ApiProperty({ example: 100 })
+  v10: number;
+
+  @ApiProperty({ example: 100 })
+  v15: number;
+
+  @ApiProperty({ example: 100 })
+  v20: number;
 }
 
 export class RewardStateResponse {
@@ -35,7 +38,7 @@ export class SpinResponse {
   inventory: GiftInventory;
 }
 
-export class PickResponse {
+export class GauResponse {
   @ApiProperty({ type: RewardClaimResponse })
   claim: RewardClaimResponse;
 
@@ -49,16 +52,16 @@ export class FoodResponse {
 }
 
 export class AdminGiftStatResponse {
-  @ApiProperty({ example: 'ao', enum: ['ao', 'tui', 'odu', 'gau'] })
+  @ApiProperty({ example: 'odu', enum: ['odu', 'gau', 'v10', 'v15', 'v20'] })
   key: GiftKey;
 
-  @ApiProperty({ example: 'Áo' })
+  @ApiProperty({ example: 'Ô dù' })
   name: string;
 
-  @ApiProperty({ example: '👕' })
+  @ApiProperty({ example: '☂️' })
   icon: string;
 
-  @ApiProperty({ example: 100 })
+  @ApiProperty({ example: 60 })
   stock: number;
 
   @ApiProperty({ example: 0.2 })
@@ -70,7 +73,10 @@ export class AdminInventoryResponse {
   inventory: GiftInventory;
 
   @ApiProperty({
-    example: { luck: 0.4, gifts: { ao: 0.2, tui: 0.2, odu: 0.2, gau: 0 } },
+    example: {
+      luck: 0,
+      gifts: { odu: 0.13, gau: 0.23, v10: 0.21, v15: 0.21, v20: 0.21 },
+    },
   })
   odds: {
     luck: number;

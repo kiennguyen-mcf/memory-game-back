@@ -14,7 +14,6 @@ import {
   GIFT_KEYS,
   INVENTORY_DEFAULT,
   LUCK_LABEL,
-  WHEEL_GIFT_KEYS,
   computeWheelOdds,
   pickWheelResult,
   totalStock,
@@ -24,7 +23,7 @@ import {
 } from '@/utils/rewards';
 import {
   AdminInventoryResponse,
-  PickResponse,
+  GauResponse,
   RewardStateResponse,
   SpinResponse,
 } from '@/models/responses/reward-state.response';
@@ -40,7 +39,7 @@ export class RewardService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // Seed default inventory (ao/tui/odu/gau = 100) when empty.
+    // Seed default inventory (odu/gau/v10/v15/v20) when empty.
     const count = await this.giftInventoryModel.countDocuments().exec();
     if (count > 0) return;
     await this.giftInventoryModel.insertMany(
@@ -54,13 +53,13 @@ export class RewardService implements OnModuleInit {
       foodClaimed: row.foodClaimed ?? false,
       wheelPrizeLabel: row.wheelPrizeLabel ?? null,
       wheelGift: (row.wheelGift as WheelGift) ?? null,
-      chosenGift: (row.chosenGift as GiftKey) ?? null,
+      gauGranted: row.gauGranted ?? false,
     };
   }
 
   private async loadInventory(): Promise<GiftInventoryRecord> {
     const rows = await this.giftInventoryModel.find().lean().exec();
-    const inventory: GiftInventoryRecord = { ao: 0, tui: 0, odu: 0, gau: 0 };
+    const inventory: GiftInventoryRecord = { odu: 0, gau: 0, v10: 0, v15: 0, v20: 0 };
     for (const row of rows) {
       if (GIFT_KEYS.includes(row.key as GiftKey)) {
         inventory[row.key as GiftKey] = row.count;
@@ -180,7 +179,7 @@ export class RewardService implements OnModuleInit {
       { playerId },
       {
         $set: { wheelPrizeLabel: prizeLabel, wheelGift: storedGift },
-        $setOnInsert: { playerId, foodClaimed: false, chosenGift: null },
+        $setOnInsert: { playerId, foodClaimed: false, gauGranted: false },
       },
       { upsert: true, new: true },
     );
@@ -197,32 +196,27 @@ export class RewardService implements OnModuleInit {
     };
   }
 
-  async pick(playerId: string, gift: string): Promise<PickResponse> {
-    if (!playerId || !gift) {
-      throw new BadRequestException({ error: 'Missing playerId or gift' });
-    }
-    const giftKey = gift as GiftKey;
-    if (!WHEEL_GIFT_KEYS.includes(giftKey)) {
-      throw new BadRequestException({ error: 'Invalid gift' });
+  // Grant the guaranteed Gấu bông for reaching 600 points. It is always granted
+  // before the spin, and can only be granted once per player.
+  async grantGau(playerId: string): Promise<GauResponse> {
+    if (!playerId) {
+      throw new BadRequestException({ error: 'Missing playerId' });
     }
 
     const existing = await this.rewardClaimModel
       .findOne({ playerId })
       .lean()
       .exec();
-    if (!existing?.wheelPrizeLabel) {
-      throw new BadRequestException({ error: 'spin-first' });
-    }
-    if (existing.chosenGift) {
+    if (existing?.gauGranted) {
       throw new ConflictException({
-        error: 'already-picked',
+        error: 'already-granted',
         claim: this.toClaimView(existing),
       });
     }
 
     const decremented = await this.giftInventoryModel
       .findOneAndUpdate(
-        { key: giftKey, count: { $gt: 0 } },
+        { key: 'gau', count: { $gt: 0 } },
         { $inc: { count: -1 } },
         { new: true },
       )
@@ -234,7 +228,19 @@ export class RewardService implements OnModuleInit {
     }
 
     await this.rewardClaimModel
-      .findOneAndUpdate({ playerId }, { $set: { chosenGift: giftKey } })
+      .findOneAndUpdate(
+        { playerId },
+        {
+          $set: { gauGranted: true },
+          $setOnInsert: {
+            playerId,
+            foodClaimed: false,
+            wheelPrizeLabel: null,
+            wheelGift: null,
+          },
+        },
+        { upsert: true, new: true },
+      )
       .lean()
       .exec();
 
@@ -262,7 +268,7 @@ export class RewardService implements OnModuleInit {
           playerId,
           wheelPrizeLabel: null,
           wheelGift: null,
-          chosenGift: null,
+          gauGranted: false,
         },
       },
       { upsert: true, new: true },

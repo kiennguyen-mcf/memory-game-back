@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: memory-game-ingress
+  namespace: memory-game
+spec:
+  ingressClassName: public
+  rules:
+    - host: api-microfin.chickenkiller.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: memory-game-api
+                port:
+                  number: 3000

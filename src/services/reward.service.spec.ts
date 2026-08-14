@@ -26,7 +26,7 @@ function chainableResolve(value: unknown) {
 }
 
 const inventoryRows = (partial: Record<string, number>) =>
-  Object.entries({ ao: 0, tui: 0, odu: 0, gau: 0, ...partial }).map(
+  Object.entries({ odu: 0, gau: 0, v10: 0, v15: 0, v20: 0, ...partial }).map(
     ([key, count]) => ({ key, count }),
   );
 
@@ -35,7 +35,7 @@ const claimRow = (overrides: Record<string, unknown> = {}) => ({
   foodClaimed: false,
   wheelPrizeLabel: null,
   wheelGift: null,
-  chosenGift: null,
+  gauGranted: false,
   ...overrides,
 });
 
@@ -76,10 +76,11 @@ describe('RewardService', () => {
 
       expect(giftModel.insertMany).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ key: 'ao', count: INVENTORY_DEFAULT.ao }),
-          expect.objectContaining({ key: 'tui', count: INVENTORY_DEFAULT.tui }),
           expect.objectContaining({ key: 'odu', count: INVENTORY_DEFAULT.odu }),
           expect.objectContaining({ key: 'gau', count: INVENTORY_DEFAULT.gau }),
+          expect.objectContaining({ key: 'v10', count: INVENTORY_DEFAULT.v10 }),
+          expect.objectContaining({ key: 'v15', count: INVENTORY_DEFAULT.v15 }),
+          expect.objectContaining({ key: 'v20', count: INVENTORY_DEFAULT.v20 }),
         ]),
       );
     });
@@ -97,22 +98,28 @@ describe('RewardService', () => {
     it('returns claim + inventory', async () => {
       claimModel.findOne.mockReturnValue(
         chainableResolve(
-          claimRow({ wheelPrizeLabel: '👕 Áo', wheelGift: 'ao' }),
+          claimRow({ wheelPrizeLabel: '🎟️ Voucher giảm 10%', wheelGift: 'v10' }),
         ),
       );
       giftModel.find.mockReturnValue(
-        chainableResolve(inventoryRows({ ao: 50 })),
+        chainableResolve(inventoryRows({ odu: 50 })),
       );
 
       const result = await service.getRewardState('p1');
 
       expect(result.claim).toEqual({
         foodClaimed: false,
-        wheelPrizeLabel: '👕 Áo',
-        wheelGift: 'ao',
-        chosenGift: null,
+        wheelPrizeLabel: '🎟️ Voucher giảm 10%',
+        wheelGift: 'v10',
+        gauGranted: false,
       });
-      expect(result.inventory).toEqual({ ao: 50, tui: 0, odu: 0, gau: 0 });
+      expect(result.inventory).toEqual({
+        odu: 50,
+        gau: 0,
+        v10: 0,
+        v15: 0,
+        v20: 0,
+      });
     });
 
     it('throws BadRequestException for missing userId', async () => {
@@ -125,20 +132,29 @@ describe('RewardService', () => {
   describe('getAdminInventory', () => {
     it('computes odds + per-gift stats', async () => {
       giftModel.find.mockReturnValue(
-        chainableResolve(inventoryRows({ ao: 40, tui: 30, odu: 20, gau: 10 })),
+        chainableResolve(
+          inventoryRows({ odu: 60, gau: 108, v10: 100, v15: 100, v20: 100 }),
+        ),
       );
 
       const result = await service.getAdminInventory();
 
-      expect(result.inventory).toEqual({ ao: 40, tui: 30, odu: 20, gau: 10 });
-      expect(result.gifts).toHaveLength(4);
-      expect(result.gifts[0]).toMatchObject({ key: 'ao', stock: 40 });
-      expect(result.gifts[3]).toMatchObject({ key: 'gau', stock: 10 });
+      expect(result.inventory).toEqual({
+        odu: 60,
+        gau: 108,
+        v10: 100,
+        v15: 100,
+        v20: 100,
+      });
+      expect(result.gifts).toHaveLength(5);
+      expect(result.gifts[0]).toMatchObject({ key: 'odu', stock: 60 });
+      expect(result.gifts[4]).toMatchObject({ key: 'v20', stock: 100 });
       // Odds are weighted by remaining stock: stock[key] / totalStock.
-      expect(result.odds.gifts.ao).toBeCloseTo(40 / 100, 5);
-      expect(result.odds.gifts.tui).toBeCloseTo(30 / 100, 5);
-      expect(result.odds.gifts.odu).toBeCloseTo(20 / 100, 5);
-      expect(result.odds.gifts.gau).toBeCloseTo(10 / 100, 5);
+      expect(result.odds.gifts.odu).toBeCloseTo(60 / 468, 5);
+      expect(result.odds.gifts.gau).toBeCloseTo(108 / 468, 5);
+      expect(result.odds.gifts.v10).toBeCloseTo(100 / 468, 5);
+      expect(result.odds.gifts.v15).toBeCloseTo(100 / 468, 5);
+      expect(result.odds.gifts.v20).toBeCloseTo(100 / 468, 5);
       expect(result.odds.luck).toBe(0);
     });
   });
@@ -147,25 +163,28 @@ describe('RewardService', () => {
     it('upserts each gift count and returns admin view', async () => {
       giftModel.findOneAndUpdate.mockReturnValue(chainableResolve(null));
       giftModel.find.mockReturnValue(
-        chainableResolve(inventoryRows({ ao: 7, tui: 8, odu: 9, gau: 10 })),
+        chainableResolve(
+          inventoryRows({ odu: 7, gau: 8, v10: 9, v15: 10, v20: 11 }),
+        ),
       );
 
       const result = await service.updateInventory({
-        ao: 7,
-        tui: 8,
-        odu: 9,
-        gau: 10,
+        odu: 7,
+        gau: 8,
+        v10: 9,
+        v15: 10,
+        v20: 11,
       });
 
-      expect(giftModel.findOneAndUpdate).toHaveBeenCalledTimes(4);
-      expect(result.inventory.ao).toBe(7);
+      expect(giftModel.findOneAndUpdate).toHaveBeenCalledTimes(5);
+      expect(result.inventory.odu).toBe(7);
     });
   });
 
   describe('spin', () => {
     it('throws already-spun when a wheel prize already exists', async () => {
       claimModel.findOne.mockReturnValue(
-        chainableResolve(claimRow({ wheelPrizeLabel: '👕 Áo' })),
+        chainableResolve(claimRow({ wheelPrizeLabel: '🎟️ Voucher giảm 10%' })),
       );
 
       await expect(service.spin('p1')).rejects.toThrow(ConflictException);
@@ -183,16 +202,19 @@ describe('RewardService', () => {
         .mockReturnValueOnce(chainableResolve(null))
         .mockReturnValueOnce(
           chainableResolve(
-            claimRow({ wheelPrizeLabel: '👕 Áo', wheelGift: 'ao' }),
+            claimRow({
+              wheelPrizeLabel: '🎟️ Voucher giảm 10%',
+              wheelGift: 'v10',
+            }),
           ),
         );
       giftModel.find.mockReturnValue(
         chainableResolve(
-          inventoryRows({ ao: 100, tui: 100, odu: 100, gau: 100 }),
+          inventoryRows({ odu: 60, gau: 108, v10: 100, v15: 100, v20: 100 }),
         ),
       );
       giftModel.findOneAndUpdate.mockReturnValue(
-        chainableResolve({ key: 'ao', count: 99 }),
+        chainableResolve({ key: 'v10', count: 99 }),
       );
       claimModel.findOneAndUpdate.mockResolvedValue(claimRow());
 
@@ -218,16 +240,20 @@ describe('RewardService', () => {
             }),
           ),
         );
-      // The only in-stock gift (ao) sells out between read and decrement ->
+      // The only in-stock gift (odu) sells out between read and decrement ->
       // decrement returns null -> re-read -> pick the remaining gift (gau).
       giftModel.find
         .mockReturnValueOnce(
-          chainableResolve(inventoryRows({ ao: 1, tui: 0, odu: 0, gau: 0 })),
+          chainableResolve(
+            inventoryRows({ odu: 1, gau: 0, v10: 0, v15: 0, v20: 0 }),
+          ),
         )
         .mockReturnValueOnce(
-          chainableResolve(inventoryRows({ ao: 0, tui: 0, odu: 0, gau: 1 })),
+          chainableResolve(
+            inventoryRows({ odu: 0, gau: 1, v10: 0, v15: 0, v20: 0 }),
+          ),
         );
-      // First decrement (ao) fails; second decrement (gau) succeeds.
+      // First decrement (odu) fails; second decrement (gau) succeeds.
       giftModel.findOneAndUpdate
         .mockReturnValueOnce(chainableResolve(null))
         .mockReturnValueOnce(chainableResolve({ key: 'gau', count: 0 }));
@@ -242,65 +268,43 @@ describe('RewardService', () => {
     });
   });
 
-  describe('pick', () => {
-    it('throws BadRequestException for an invalid gift', async () => {
-      await expect(service.pick('p1', 'gau')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('throws spin-first when no wheel prize was won', async () => {
-      claimModel.findOne.mockReturnValue(chainableResolve(claimRow()));
-
-      await expect(service.pick('p1', 'ao')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('throws already-picked when chosenGift is set', async () => {
+  describe('grantGau', () => {
+    it('throws already-granted when gau was already granted', async () => {
       claimModel.findOne.mockReturnValue(
-        chainableResolve(
-          claimRow({ wheelPrizeLabel: '👕 Áo', chosenGift: 'ao' }),
-        ),
+        chainableResolve(claimRow({ gauGranted: true })),
       );
 
-      await expect(service.pick('p1', 'ao')).rejects.toThrow(ConflictException);
+      await expect(service.grantGau('p1')).rejects.toThrow(ConflictException);
     });
 
     it('throws out-of-stock when decrement fails', async () => {
-      claimModel.findOne.mockReturnValue(
-        chainableResolve(claimRow({ wheelPrizeLabel: '👕 Áo' })),
-      );
+      claimModel.findOne.mockReturnValue(chainableResolve(claimRow()));
       giftModel.findOneAndUpdate.mockReturnValue(chainableResolve(null));
 
-      await expect(service.pick('p1', 'ao')).rejects.toThrow(ConflictException);
+      await expect(service.grantGau('p1')).rejects.toThrow(ConflictException);
     });
 
-    it('records chosenGift and returns claim + inventory', async () => {
+    it('grants one gau and records gauGranted on the claim', async () => {
       claimModel.findOne
+        .mockReturnValueOnce(chainableResolve(claimRow()))
         .mockReturnValueOnce(
-          chainableResolve(claimRow({ wheelPrizeLabel: '👕 Áo' })),
-        )
-        .mockReturnValueOnce(
-          chainableResolve(
-            claimRow({ wheelPrizeLabel: '👕 Áo', chosenGift: 'ao' }),
-          ),
+          chainableResolve(claimRow({ gauGranted: true })),
         );
       giftModel.findOneAndUpdate.mockReturnValue(
-        chainableResolve({ key: 'ao', count: 99 }),
+        chainableResolve({ key: 'gau', count: 107 }),
       );
       giftModel.find.mockReturnValue(
         chainableResolve(
-          inventoryRows({ ao: 99, tui: 100, odu: 100, gau: 100 }),
+          inventoryRows({ odu: 60, gau: 107, v10: 100, v15: 100, v20: 100 }),
         ),
       );
 
-      const result = await service.pick('p1', 'ao');
+      const result = await service.grantGau('p1');
 
-      expect(result.claim.chosenGift).toBe('ao');
-      expect(result.inventory.ao).toBe(99);
+      expect(result.claim.gauGranted).toBe(true);
+      expect(result.inventory.gau).toBe(107);
       expect(giftModel.findOneAndUpdate).toHaveBeenCalledWith(
-        { key: 'ao', count: { $gt: 0 } },
+        { key: 'gau', count: { $gt: 0 } },
         { $inc: { count: -1 } },
         expect.any(Object),
       );
